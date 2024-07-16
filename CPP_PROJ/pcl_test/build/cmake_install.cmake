@@ -1,4 +1,4 @@
-# Install script for directory: /home/jhongfongfah/CPP_PROJ/pcl_test
+# Install script for directory: /home/jhongfongfah/PROJ/CPP_PROJ/pcl_test
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -50,5 +50,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/jhongfongfah/CPP_PROJ/pcl_test/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/jhongfongfah/PROJ/CPP_PROJ/pcl_test/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
