@@ -86,7 +86,6 @@ void displayPointCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud) {
         0, 0, 0, 
         0, 1, 0
         );
-
     int open_time = 100000;
     while (!viewer->wasStopped()) {
         viewer->spinOnce(open_time);

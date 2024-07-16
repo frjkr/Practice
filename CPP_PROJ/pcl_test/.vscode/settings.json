@@ -1,6 +1,15 @@
+<<<<<<< HEAD
 {
     "files.associations": {
         "chrono": "cpp",
         "ostream": "cpp"
     }
 }
+||||||| 6ac642b
+=======
+{
+    "files.associations": {
+        "chrono": "cpp"
+    }
+}
+>>>>>>> origin/main
