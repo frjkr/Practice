@@ -8,16 +8,20 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <thread>
 #include <chrono>
+#include <tuple>
+#include <termios.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 using namespace std;
 namespace fs = std::filesystem;
 
 // Function to read the point cloud from a binary file.
-pcl::PointCloud<pcl::PointXYZI>::Ptr readPointCloud(const fs::path& filePath) {
+tuple<pcl::PointCloud<pcl::PointXYZI>::Ptr, pcl::PointCloud<pcl::PointXYZI>::Ptr> readPointCloud(const fs::path& filePath) {
     ifstream infile(filePath, ios::binary);
     if (!infile) {
         cerr << "Error opening file: " << filePath << endl;
-        return nullptr;
+        return {nullptr, nullptr};
     }
 
     infile.seekg(0, ios::end);
@@ -26,6 +30,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr readPointCloud(const fs::path& filePath) {
     cout << "File size: " << fileSize << " bytes" << endl;
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>());
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_zero_intensity(new pcl::PointCloud<pcl::PointXYZI>());
     int pointCount = 0;
 
     while (!infile.eof()) {
@@ -42,6 +47,8 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr readPointCloud(const fs::path& filePath) {
         // Filter out points with zero intensity
         if (point.intensity == 0.0f) {
             cout << "Zero intensity point found at (" << point.x << ", " << point.y << ", " << point.z << "), skipping..." << endl;
+            cloud_zero_intensity->points.push_back(point);
+            pointCount++;
             continue; // Skip this point
         }
 
@@ -58,37 +65,54 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr readPointCloud(const fs::path& filePath) {
     if (infile.bad()) {
         cerr << "Error reading file: " << filePath << endl;
         infile.close();
-        return nullptr;
+        return {nullptr, nullptr};
     }
-
     infile.close();
+
     cloud->width = cloud->points.size();
     cloud->height = 1;
     cloud->is_dense = true;
 
-    return cloud;
+    cloud_zero_intensity->width = cloud_zero_intensity->points.size();
+    cloud_zero_intensity->height = 1;
+    cloud_zero_intensity->is_dense = true;
+
+    return {cloud, cloud_zero_intensity};
 }
 
-// Function to display the point cloud.
-void displayPointCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud) {
-    pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
-    viewer->setBackgroundColor(0, 0, 0);
-
+// Function to display the point clouds in two different windows.
+void displayPointClouds(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_zero_intensity) {
+    // Window 1 for the main cloud (non-zero intensity)
+    pcl::visualization::PCLVisualizer::Ptr viewer1(new pcl::visualization::PCLVisualizer("Main Cloud Viewer"));
+    viewer1->setBackgroundColor(0, 0, 0);
     pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> intensity_distribution(cloud, "intensity");
-    viewer->addPointCloud<pcl::PointXYZI>(cloud, intensity_distribution, "cloud");
-
-    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cloud");
-    viewer->addCoordinateSystem(1.0);
-    viewer->initCameraParameters();
-
-    viewer->setCameraPosition(
+    viewer1->addPointCloud<pcl::PointXYZI>(cloud, intensity_distribution, "cloud");
+    viewer1->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cloud");
+    viewer1->addCoordinateSystem(1.0);
+    viewer1->initCameraParameters();
+    viewer1->setCameraPosition(
         0, 0, 50, 
         0, 0, 0, 
-        0, 1, 0
-        );
+        0, 1, 0);
+
+    // Window 2 for the zero intensity cloud
+    pcl::visualization::PCLVisualizer::Ptr viewer2(new pcl::visualization::PCLVisualizer("Zero Intensity Cloud Viewer"));
+    viewer2->setBackgroundColor(0, 0, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> zero_intensity_color(cloud_zero_intensity, 255, 0, 0);
+    viewer2->addPointCloud<pcl::PointXYZI>(cloud_zero_intensity, zero_intensity_color, "cloud_zero_intensity");
+    viewer2->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cloud_zero_intensity");
+    viewer2->addCoordinateSystem(1.0);
+    viewer2->initCameraParameters();
+    viewer2->setCameraPosition(
+        0, 0, 50, 
+        0, 0, 0, 
+        0, 1, 0);
+
+    // Loop to keep both windows open
     int open_time = 100000;
-    while (!viewer->wasStopped()) {
-        viewer->spinOnce(open_time);
+    while (!viewer1->wasStopped() && !viewer2->wasStopped()) {
+        viewer1->spinOnce(open_time);
+        viewer2->spinOnce(open_time);
         std::this_thread::sleep_for(std::chrono::milliseconds(open_time));
     }
 }
@@ -119,15 +143,18 @@ int main(int argc, char** argv) {
     }
 
     string filePath = argv[1];
-    string csvfileName  = argv[2];
+    string fileName  = argv[2];
+    string Intensity = fileName + ".csv";
+    string zeroIntensity = fileName + "_zero_intensity.csv";
 
     try {
         fs::path path(filePath);
         if (fs::is_regular_file(path) && path.extension() == ".bin") {
-            auto cloud = readPointCloud(path);
-            if (cloud) {
-                writePointCloudToFile(cloud, csvfileName);
-                displayPointCloud(cloud);
+            auto [cloud, cloud_zero_intensity] = readPointCloud(path);
+            if (cloud && cloud_zero_intensity) {
+                writePointCloudToFile(cloud, Intensity);
+                writePointCloudToFile(cloud_zero_intensity, zeroIntensity);
+                displayPointClouds(cloud, cloud_zero_intensity);
             }
         } else {
             cerr << "The specified path is not a valid .bin file: " << filePath << endl;
